@@ -33,14 +33,17 @@ module.exports = router;
 // Récupère un restaurant depuis l'id des params
 router.get('/:id', async (req, res) => {
     const id = req.params.id;
+    console.log(`Backend received request for restaurant id: ${id}`);
     try {
         const response = await axios.get('https://public.opendatasoft.com/api/records/1.0/search/', {
             params: {
                 dataset: 'osm-france-food-service',
-                q: id,
+                q: `recordid:"${id}"`,
                 rows: 1
             }
         });
+
+        console.log("Open Data Soft API response:", response.data)
         if (response.data.records.length === 0) {
             return res.status(404).json({error: 'Restaurant not found'})
         }
@@ -56,7 +59,7 @@ router.get('/:id', async (req, res) => {
             delivery: r.fields.delivery || "Non spécifié",
             takeaway: r.fields.takeaway || "Non spécifié",
             michelin: r.fields.stars || null,
-            phone: r.fields.phone || "Non spécifié",
+            phone: r.fields.phone || null,
             website: r.fields.website || null,
             city: r.fields.meta_name_com || null,
             department: r.fields.meta_name_dep || null,
@@ -65,7 +68,8 @@ router.get('/:id', async (req, res) => {
             housenumber: r.fields['addr:housenumber'] || null,
             brand: r.fields.brand || "Indépendant",
             date: r.record_timestamp,
-            rating: Math.floor(Math.random() * 5) + 1
+            rating: Math.floor(Math.random() * 5) + 1,
+            creation: r.meta_first_update || null,
         });
     } catch (error) {
         res.status(500).json({error: 'Erreur serveur'});
