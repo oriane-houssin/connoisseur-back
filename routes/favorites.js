@@ -35,4 +35,21 @@ router.get('/:restaurant_id', auth, async (req, res) => {
     }
 });
 
+//SUPPRIMER RESTO DES FAV
+router.delete('/:restaurant_id', auth, async (req, res) => {
+    const { restaurant_id } = req.params;
+    const user_id = req.user.id;
+    try {
+        const [rows] = await connection.query('DELETE FROM favorites WHERE user_id=? AND restaurant_id=?', [user_id, restaurant_id]);
+        if(rows.affectedRows > 0) {
+            res.json({success: true, message: 'Deleted' });
+        } else {
+            res.status(200).json({error: 'non trouvé'});
+        }
+    } catch (error) {
+        console.error("Erreur suppression:", error);
+        res.status(500).json({error: 'Erreur suppression'});
+    }
+})
+
 module.exports = router;
