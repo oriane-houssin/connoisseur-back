@@ -1,0 +1,64 @@
+name: Backend CI/CD to Heroku
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build_and_test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run tests
+        run: npm test -- --watchAll=false
+        env:
+          CI: true
+          # Variables d'environnement pour les tests du backend
+          DB_HOST: ${{ secrets.TEST_DB_HOST }}
+          DB_USER: ${{ secrets.TEST_DB_USER }}
+          DB_PASSWORD: ${{ secrets.TEST_DB_PASSWORD }}
+          DB_NAME: ${{ secrets.TEST_DB_NAME }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET_TEST }}
+
+  deploy:
+    needs: build_and_test # Ce job dépend de la réussite de 'build_and_test'
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' # Déploie uniquement si le push est sur la branche 'main'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy to Heroku
+        uses: akhileshns/heroku-deploy@v3.12.12
+        with:
+          heroku_api_key: ${{ secrets.HEROKU_API_KEY }}
+          heroku_app_name: "connoisseur-backend" # **IMPORTANT: Remplacez par le nom réel de votre application Heroku**
+          heroku_email: "oriane.houssin@next-u.fr" # **IMPORTANT: Remplacez par l'email de votre compte Heroku**
+          remote_branch: main # Si vous voulez que Heroku déploie depuis la branche 'main'
+
+      # Optional: Run database migrations after deployment
+      # This assumes your migration script is executable via 'npm run migrate'
+      # You might need to configure Heroku buildpacks or use SSH to run this.
+      # For Heroku, it's often better to have migrations run as a Release Phase.
+      # - name: Run Heroku database migrations (if applicable)
+      #   run: heroku run npm run migrate --app your-connoisseur-backend-app
+      #   env:
+      #     HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
+      #     HEROKU_EMAIL: "your-email@example.com"
+      #     # Assurez-vous que les variables d'environnement de la DB sont configurées sur Heroku
