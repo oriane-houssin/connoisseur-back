@@ -1,7 +1,7 @@
 const request = require('supertest');
 const express = require('express');
 const authRoutes = require('../routes/auth');
-const connection = require('../db'); // Le mock sera appliqué à celui-ci
+const getDbConnection = require('../db'); // Le mock sera appliqué à celui-ci
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 
@@ -11,9 +11,7 @@ app.use(express.json());
 app.use('/api/auth', authRoutes);
 
 // Mock la connexion à la base de données
-jest.mock('../db', () => ({
-    query: jest.fn(),
-}));
+jest.mock('../db', () => jest.fn());
 
 // Mock bcrypt
 jest.mock('bcryptjs', () => ({
@@ -40,9 +38,22 @@ afterAll(() => {
 });
 
 describe('Auth Routes', () => {
-    beforeEach(() => {
+    let mockConnection;
+    beforeEach(async () => {
+        // Créez un mock de l'objet de connexion pour chaque test
+        mockConnection = {
+            query: jest.fn(),
+            // Ajoutez d'autres méthodes de connexion si vos routes les utilisent (ex: .end())
+        };
+
+        // Configurez getDbConnection pour retourner le mockConnection
+        getDbConnection.mockResolvedValue(mockConnection); // Cette ligne est cruciale
+
         // Réinitialiser tous les mocks avant chaque test
-        connection.query.mockReset();
+        // Réinitialiser getDbConnection elle-même
+        getDbConnection.mockClear(); // Réinitialise le mock de la fonction getDbConnection
+        mockConnection.query.mockReset(); // Réinitialise le mock de la méthode query
+        // Réinitialiser tous les mocks avant chaque test
         bcrypt.hash.mockReset();
         bcrypt.compare.mockReset();
         jwt.sign.mockReset();
@@ -57,7 +68,7 @@ describe('Auth Routes', () => {
         };
 
         bcrypt.hash.mockResolvedValue('hashedpassword123'); // Simule le hachage
-        connection.query.mockResolvedValueOnce([{ insertId: 1, affectedRows: 1 }]); // Simule l'insertion DB
+        mockConnection.query.mockResolvedValueOnce([{ insertId: 1, affectedRows: 1 }]); // Simule l'insertion DB
 
         const res = await request(app)
             .post('/api/auth/register')
@@ -66,7 +77,8 @@ describe('Auth Routes', () => {
         expect(res.statusCode).toEqual(201);
         expect(res.body).toEqual({ id: 1, username: 'testuser' });
         expect(bcrypt.hash).toHaveBeenCalledWith('password123', 10);
-        expect(connection.query).toHaveBeenCalledWith(
+        expect(getDbConnection).toHaveBeenCalled();
+        expect(mockConnection.query).toHaveBeenCalledWith(
             'INSERT INTO users (username, email, password) VALUES (?, ?, ?)',
             [newUser.username, newUser.email, 'hashedpassword123']
         );
@@ -80,7 +92,7 @@ describe('Auth Routes', () => {
         };
 
         bcrypt.hash.mockResolvedValue('hashedpassword');
-        connection.query.mockRejectedValueOnce(new Error('DB error')); // Simule une erreur DB
+        mockConnection.query.mockRejectedValueOnce(new Error('DB error')); // Simule une erreur DB
 
         const res = await request(app)
             .post('/api/auth/register')
@@ -99,7 +111,7 @@ describe('Auth Routes', () => {
         const dbUser = { id: 1, username: 'existinguser', email: 'existing@example.com', password: 'hashedpassword' };
         const token = 'fake_jwt_token';
 
-        connection.query.mockResolvedValueOnce([[dbUser]]); // Simule la recherche de l'utilisateur
+        mockConnection.query.mockResolvedValueOnce([[dbUser]]); // Simule la recherche de l'utilisateur
         bcrypt.compare.mockResolvedValue(true); // Simule la comparaison de mot de passe réussie
         jwt.sign.mockReturnValue(token); // Simule la génération de JWT
 
@@ -112,14 +124,15 @@ describe('Auth Routes', () => {
             token,
             user: { id: 1, username: 'existinguser', email: 'existing@example.com' },
         });
-        expect(connection.query).toHaveBeenCalledWith('SELECT * FROM users WHERE email = ?', [existingUser.email]);
+        expect(getDbConnection).toHaveBeenCalled();
+        expect(mockConnection.query).toHaveBeenCalledWith('SELECT * FROM users WHERE email = ?', [existingUser.email]);
         expect(bcrypt.compare).toHaveBeenCalledWith(existingUser.password, dbUser.password);
         expect(jwt.sign).toHaveBeenCalledWith({ id: dbUser.id }, 'test_secret', { expiresIn: '1h' });
     });
 
     test('POST /api/auth/login - should return 400 if user not found', async () => {
         const loginData = { email: 'nonexistent@example.com', password: 'password123' };
-        connection.query.mockResolvedValueOnce([[]]); // Simule utilisateur non trouvé
+        mockConnection.query.mockResolvedValueOnce([[]]); // Simule utilisateur non trouvé
 
         const res = await request(app)
             .post('/api/auth/login')
@@ -133,7 +146,7 @@ describe('Auth Routes', () => {
         const loginData = { email: 'existing@example.com', password: 'wrongpassword' };
         const dbUser = { id: 1, username: 'existinguser', email: 'existing@example.com', password: 'hashedpassword' };
 
-        connection.query.mockResolvedValueOnce([[dbUser]]);
+        mockConnection.query.mockResolvedValueOnce([[dbUser]]);
         bcrypt.compare.mockResolvedValue(false); // Simule mot de passe incorrect
 
         const res = await request(app)

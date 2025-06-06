@@ -1,7 +1,7 @@
 const request = require('supertest');
 const express = require('express');
 const favoritesRoutes = require('../routes/favorites');
-const connection = require('../db');
+const getDbConnection = require('../db');
 const auth = require('../middleware/jwtAuth');
 
 // Créer une application Express
@@ -17,18 +17,29 @@ jest.mock('../middleware/jwtAuth', () => (req, res, next) => {
 app.use('/api/favorites', favoritesRoutes);
 
 // Mock la connexion à la base de données
-jest.mock('../db', () => ({
-    query: jest.fn(),
-}));
+jest.mock('../db', () => jest.fn());
 
 describe('Favorites Routes', () => {
+    let mockConnection;
     beforeEach(() => {
-        connection.query.mockReset();
+        // Créez un mock de l'objet de connexion pour chaque test
+        mockConnection = {
+            query: jest.fn(),
+            // Ajoutez d'autres méthodes de connexion si vos routes les utilisent (ex: .end())
+        };
+
+        // Configurez getDbConnection pour retourner le mockConnection
+        getDbConnection.mockResolvedValue(mockConnection); // Cette ligne est cruciale
+
+        // Réinitialiser tous les mocks avant chaque test
+        // Réinitialiser getDbConnection elle-même
+        getDbConnection.mockClear(); // Réinitialise le mock de la fonction getDbConnection
+        mockConnection.query.mockReset(); // Réinitialise le mock de la méthode query
     });
 
     // Test POST /api/favorites
     test('POST /api/favorites - should add a restaurant to favorites', async () => {
-        connection.query.mockResolvedValueOnce([{ affectedRows: 1 }]);
+        mockConnection.query.mockResolvedValueOnce([{ affectedRows: 1 }]);
 
         const res = await request(app)
             .post('/api/favorites')
@@ -37,14 +48,15 @@ describe('Favorites Routes', () => {
 
         expect(res.statusCode).toEqual(200);
         expect(res.body).toEqual({ success: true });
-        expect(connection.query).toHaveBeenCalledWith(
+        expect(getDbConnection).toHaveBeenCalled();
+        expect(mockConnection.query).toHaveBeenCalledWith(
             'INSERT IGNORE INTO favorites (user_id, restaurant_id) VALUES (?, ?)',
             [123, 'resto123']
         );
     });
 
     test('POST /api/favorites - should return 500 on database error', async () => {
-        connection.query.mockRejectedValueOnce(new Error('DB insert error'));
+        mockConnection.query.mockRejectedValueOnce(new Error('DB insert error'));
 
         const res = await request(app)
             .post('/api/favorites')
@@ -56,7 +68,7 @@ describe('Favorites Routes', () => {
     });
 
     test('GET /api/favorites/:restaurant_id - should return true if restaurant is favorite', async () => {
-        connection.query.mockResolvedValueOnce([[{}]]); // Simule une ligne trouvée
+        mockConnection.query.mockResolvedValueOnce([[{}]]); // Simule une ligne trouvée
 
         const res = await request(app)
             .get('/api/favorites/resto456')
@@ -64,14 +76,15 @@ describe('Favorites Routes', () => {
 
         expect(res.statusCode).toEqual(200);
         expect(res.body).toEqual({ favorite: true });
-        expect(connection.query).toHaveBeenCalledWith(
+        expect(getDbConnection).toHaveBeenCalled();
+        expect(mockConnection.query).toHaveBeenCalledWith(
             'SELECT 1 FROM favorites WHERE user_id=? AND restaurant_id=? LIMIT 1',
             [123, 'resto456']
         );
     });
 
     test('GET /api/favorites/:restaurant_id - should return false if restaurant is not favorite', async () => {
-        connection.query.mockResolvedValueOnce([[]]); // Simule aucune ligne trouvée
+        mockConnection.query.mockResolvedValueOnce([[]]); // Simule aucune ligne trouvée
 
         const res = await request(app)
             .get('/api/favorites/resto789')
@@ -82,7 +95,7 @@ describe('Favorites Routes', () => {
     });
 
     test('GET /api/favorites/:restaurant_id - should return 500 on database error', async () => {
-        connection.query.mockRejectedValueOnce(new Error('DB select error'));
+        mockConnection.query.mockRejectedValueOnce(new Error('DB select error'));
 
         const res = await request(app)
             .get('/api/favorites/resto_error')
@@ -94,7 +107,7 @@ describe('Favorites Routes', () => {
 
     // Test DELETE /api/favorites/:restaurant_id
     test('DELETE /api/favorites/:restaurant_id - should delete a restaurant from favorites', async () => {
-        connection.query.mockResolvedValueOnce([{ affectedRows: 1 }]);
+        mockConnection.query.mockResolvedValueOnce([{ affectedRows: 1 }]);
 
         const res = await request(app)
             .delete('/api/favorites/resto_to_delete')
@@ -102,14 +115,15 @@ describe('Favorites Routes', () => {
 
         expect(res.statusCode).toEqual(200);
         expect(res.body).toEqual({ success: true, message: 'Deleted' });
-        expect(connection.query).toHaveBeenCalledWith(
+        expect(getDbConnection).toHaveBeenCalled();
+        expect(mockConnection.query).toHaveBeenCalledWith(
             'DELETE FROM favorites WHERE user_id=? AND restaurant_id=?',
             [123, 'resto_to_delete']
         );
     });
 
     test('DELETE /api/favorites/:restaurant_id - should return 404 if restaurant not found in favorites', async () => {
-        connection.query.mockResolvedValueOnce([{ affectedRows: 0 }]);
+        mockConnection.query.mockResolvedValueOnce([{ affectedRows: 0 }]);
 
         const res = await request(app)
             .delete('/api/favorites/non_existent_resto')
@@ -120,7 +134,7 @@ describe('Favorites Routes', () => {
     });
 
     test('DELETE /api/favorites/:restaurant_id - should return 500 on database error', async () => {
-        connection.query.mockRejectedValueOnce(new Error('DB delete error'));
+        mockConnection.query.mockRejectedValueOnce(new Error('DB delete error'));
 
         const res = await request(app)
             .delete('/api/favorites/resto_delete_error')
