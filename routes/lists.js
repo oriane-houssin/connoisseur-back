@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const connection = require('../db');
+const getDbConnection = require('../db');
 const auth = require('../middleware/jwtAuth');
 
 //CREATE LIST
@@ -12,6 +12,7 @@ router.post('/', auth, async (req, res) => {
         return res.status(400).send({error: 'Missing name'});
     }
     try {
+        const connection = await getDbConnection();
         const [result] = await connection.query('INSERT INTO user_lists (user_id, name, description) VALUES (?,?,?)', [user_id, name, description]);
         res.status(201).json({success: true, message: `Successfully created`, list_id: result.insertId});
     } catch (error) {
@@ -26,6 +27,7 @@ router.get('/', auth, async (req, res) => {
     const user_id = req.user.id;
 
     try {
+        const connection = await getDbConnection();
         const [rows] = await connection.query('SELECT id, name, description, created_at FROM user_lists WHERE user_id = ? ORDER BY created_at DESC', [user_id]);
         res.json(rows);
     } catch (error) {
@@ -40,6 +42,7 @@ router.get('/:list_id', auth, async (req, res) => {
     const user_id = req.user.id;
 
     try {
+        const connection = await getDbConnection();
         const [listRows] = await connection.query('SELECT id, name, description, created_at FROM user_lists WHERE id = ? AND user_id = ? LIMIT 1', [list_id, user_id]);
         if (listRows.length === 0) {
             return res.status(404).json({error: 'Liste non trouvée'});
@@ -65,6 +68,7 @@ router.put('/:list_id', auth, async (req, res) => {
         return res.status(400).json({error: 'Au moins le nom ou la description est requis pour la mise à jour.'});
     }
     try {
+        const connection = await getDbConnection();
         const [result] = await connection.query('UPDATE user_lists SET name = COALESCE(?, name), description = COALESCE(?, description) WHERE id = ? AND user_id = ?',
             [name, description, list_id, user_id]);
         if (result.affectedRows === 0) {
@@ -86,6 +90,7 @@ router.delete('/:list_id', auth, async (req, res) => {
     const user_id = req.user.id;
 
     try {
+        const connection = await getDbConnection();
         const [result] = await connection.query('DELETE FROM user_lists WHERE id = ? AND user_id = ?', [list_id, user_id]);
         if (result.affectedRows === 0) {
             return res.status(404).json({error: 'Liste non trouvée'});
@@ -110,6 +115,7 @@ router.post('/:list_id/restaurants', auth, async (req, res) => {
     }
 
     try {
+        const connection = await getDbConnection();
         const [listCheck] = await connection.query('SELECT id FROM user_lists WHERE id = ? AND user_id = ? LIMIT 1', [list_id, user_id]);
         if (listCheck.length === 0) {
             return res.status(404).json({error: 'Liste non trouvée'});
@@ -133,6 +139,7 @@ router.delete('/:list_id/restaurants/:restaurant_id', auth, async (req, res) => 
     const user_id = req.user.id;
 
     try {
+        const connection = await getDbConnection();
         const [listCheck] = await connection.query('SELECT id FROM user_lists WHERE id = ? AND user_id = ? LIMIT 1', [list_id, user_id]);
         if (listCheck.length === 0) {
             return res.status(404).json({error: 'Liste non trouvée'});

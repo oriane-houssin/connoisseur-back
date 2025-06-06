@@ -2,12 +2,13 @@ const express = require("express");
 const router = express.Router();
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
-const connection = require('../db');
+const getDbConnection = require('../db');
 
 // SIGN UP
 router.post("/register", async (req, res) => {
     const { username, email, password } = req.body;
     try {
+        const connection = await getDbConnection();
         const hashedPassword = await bcrypt.hash(password, 10);
         const [result] = await connection.query(
             'INSERT INTO users (username, email, password) VALUES (?, ?, ?)',
@@ -22,6 +23,7 @@ router.post("/register", async (req, res) => {
 router.post("/login", async (req, res) => {
     const { email, password } = req.body;
     try {
+        const connection = await getDbConnection();
         const [rows] = await connection.query('SELECT * FROM users WHERE email = ?', [email]);
         const user = rows[0];
         if (!user) return res.status(400).json({error: 'User not found'});

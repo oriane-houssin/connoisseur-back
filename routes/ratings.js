@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const connection = require('../db');
+const getDbConnection = require('../db');
 const auth = require('../middleware/jwtAuth');
 
 //CREATE + UPDATE rating
@@ -12,6 +12,7 @@ router.post('/', auth, async (req, res) => {
         return res.status(400).json({error: 'Please enter a valid rating (1-5) and restaurant ID'});
     }
     try {
+        const connection = await getDbConnection();
         const [result] = await connection.query('INSERT INTO ratings (user_id, restaurant_id, rating) VALUES (?,?,?) ON DUPLICATE KEY UPDATE rating = ?',
             [user_id, restaurant_id, rating, rating]);
         if (result.affectedRows > 0) {
@@ -31,6 +32,7 @@ router.get('/:restaurant_id', auth, async (req, res) => {
     const user_id = req.user.id;
 
     try {
+        const connection = await getDbConnection();
         const [rows] = await connection.query('SELECT rating FROM ratings WHERE user_id=? AND restaurant_id=? LIMIT 1', [user_id, restaurant_id]);
         if (rows.length > 0) {
             res.json({userRating: rows[0].rating});
