@@ -44,7 +44,7 @@ router.delete('/:restaurant_id', auth, async (req, res) => {
         if(rows.affectedRows > 0) {
             res.json({success: true, message: 'Deleted' });
         } else {
-            res.status(200).json({error: 'non trouvé'});
+            res.status(404).json({error: 'non trouvé'});
         }
     } catch (error) {
         console.error("Erreur suppression:", error);
